@@ -768,6 +768,20 @@
   </url>
   
   <url>
+    <loc>https://Pratichhya.github.io/about/</loc>
+    <xhtml:link
+                rel="alternate"
+                hreflang="fr"
+                href="https://Pratichhya.github.io/fr/about/"
+                />
+    <xhtml:link
+                rel="alternate"
+                hreflang="en"
+                href="https://Pratichhya.github.io/about/"
+                />
+  </url>
+  
+  <url>
     <loc>https://Pratichhya.github.io/contact/</loc>
     <xhtml:link
                 rel="alternate"
@@ -779,10 +793,6 @@
                 hreflang="en"
                 href="https://Pratichhya.github.io/contact/"
                 />
-  </url>
-  
-  <url>
-    <loc>https://Pratichhya.github.io/cs/</loc>
   </url>
   
   <url>

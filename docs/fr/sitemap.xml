@@ -965,6 +965,16 @@
   
   <url>
     <loc>https://Pratichhya.github.io/fr/about/</loc>
+    <xhtml:link
+                rel="alternate"
+                hreflang="en"
+                href="https://Pratichhya.github.io/about/"
+                />
+    <xhtml:link
+                rel="alternate"
+                hreflang="fr"
+                href="https://Pratichhya.github.io/fr/about/"
+                />
   </url>
   
   <url>
