@@ -1,5 +1,5 @@
 ######################## default configuration ####################
-baseURL = "http://examplesite.org"
+baseURL = "https://Pratichhya.github.io"
 title = "Educenter | hugo education template"
 theme = "educenter-hugo"
 # post pagination
@@ -42,7 +42,6 @@ link = "plugins/google-map/gmap.js"
 
 
 ############################## navigation ###############################
-
 # main menu
 [[menu.main]]
 name = "About"
