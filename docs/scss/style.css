@@ -237,13 +237,12 @@ body {
 
 ol {
   list-style-type: none;
-  margin: 0px;
+  margin: 5px;
   text-align: justify;
-  display: inline-block;
 }
 ul {
   list-style-type: none;
-  margin: 0px;
+  margin: 5px;
   text-align: justify;
 }
 
