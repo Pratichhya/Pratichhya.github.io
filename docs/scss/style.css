@@ -175,7 +175,6 @@ h6,
   background-color: #ffbc3b !important;
   border-color: #ffbc3b !important;
 }
-
 .btn-outline-primary {
   color: #ffbc3b;
   background-color: transparent;
@@ -236,10 +235,16 @@ body {
   justify-content: center;
 }
 
-ol,
+ol {
+  list-style-type: none;
+  margin: 0px;
+  text-align: justify;
+  display: inline-block;
+}
 ul {
   list-style-type: none;
   margin: 0px;
+  text-align: justify;
 }
 
 img {
