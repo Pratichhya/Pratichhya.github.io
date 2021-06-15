@@ -1,7 +1,8 @@
 ---
 title: "Geoinformatics meets Data Science "
 author: "Pratichhya Sharma"
-date: "6/12/2021"
+footer: "Pratichhya Sharma © Copyright 2020"
+
 output: html_document
 ---
 
