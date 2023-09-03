@@ -247,6 +247,7 @@ ul {
 
 img {
   vertical-align: middle;
+  max-width: 100%;
   border: 0;
 }
 
@@ -310,16 +311,7 @@ a h4:hover {
 .overlay {
   position: relative;
 }
-.overlay::before {
-  position: absolute;
-  content: "";
-  height: 100%;
-  width: 100%;
-  top: 0;
-  left: 0;
-  background: #3d3d3d;
-  opacity: 0.5;
-}
+
 
 .outline-0 {
   outline: 0 !important;
@@ -979,3 +971,61 @@ link:focus,
   border: 5px solid rgb(255, 255, 255);
   margin: 0;
 }
+
+/* Add styling for block separation and equal sizing */
+.block-container {
+  margin-bottom: 20px; /* Add space between blocks */
+}
+
+.publication-row {
+  display: flex;
+  justify-content: space-between; /* Spread columns evenly */
+  border: 1px solid #ccc; /* Add a border to separate blocks */
+  padding: 10px; /* Add padding to the row for spacing */
+}
+
+.col-lg-4 {
+  flex: 1; /* Equal width columns */
+  text-align: center; /* Center content horizontally */
+  padding: 10px; /* Add padding for spacing */
+}
+
+img {
+  max-width: 100%; /* Ensure images don't exceed the column width */
+  height: auto; /* Maintain aspect ratio */
+}
+
+.text-muted {
+  margin: 0; /* Remove default margins for the text */
+}
+
+/* Add styling for circular images */
+.image-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.circle {
+  width: 100px; /* Set the circle's width and height */
+  height: 150px;
+  border-radius: 70%; /* Make it a circle */
+  overflow: hidden; /* Hide the overflow (for non-square images) */
+}
+
+.tooltip {
+  position: absolute;
+  top: 50%; /* Position tooltip in the middle of the circle */
+  left: 50%;
+  transform: translate(-50%, -50%); /* Center the tooltip */
+  background-color: rgba(0, 0, 0, 0.7); /* Background color for tooltip */
+  color: white; /* Text color for tooltip */
+  padding: 5px 10px; /* Add padding to the tooltip */
+  border-radius: 5px; /* Rounded corners for the tooltip */
+  opacity: 0; /* Initially hidden */
+  transition: opacity 0.3s; /* Smooth transition for visibility */
+}
+
+.circle:hover .tooltip {
+  opacity: 1; /* Show the tooltip on hover */
+}
+
