@@ -1,0 +1,732 @@
+{
+    "process_graph": {
+        "loadcollection1": {
+            "process_id": "load_collection",
+            "arguments": {
+                "bands": [
+                    "VH",
+                    "VV"
+                ],
+                "id": "SENTINEL1_GAMMA0_SENTINELHUB",
+                "properties": {
+                    "polarization": {
+                        "process_graph": {
+                            "eq1": {
+                                "process_id": "eq",
+                                "arguments": {
+                                    "x": {
+                                        "from_parameter": "value"
+                                    },
+                                    "y": "DV"
+                                },
+                                "result": true
+                            }
+                        }
+                    }
+                },
+                "spatial_extent": null,
+                "temporal_extent": null
+            }
+        },
+        "sarbackscatter1": {
+            "process_id": "sar_backscatter",
+            "arguments": {
+                "coefficient": "gamma0-terrain",
+                "contributing_area": false,
+                "data": {
+                    "from_node": "loadcollection1"
+                },
+                "elevation_model": null,
+                "ellipsoid_incidence_angle": false,
+                "local_incidence_angle": false,
+                "mask": false,
+                "noise_removal": true
+            }
+        },
+        "loadcollection2": {
+            "process_id": "load_collection",
+            "arguments": {
+                "bands": [
+                    "B03",
+                    "B04",
+                    "B08",
+                    "sunAzimuthAngles",
+                    "sunZenithAngles",
+                    "viewAzimuthMean",
+                    "viewZenithMean"
+                ],
+                "id": "SENTINEL2_L2A_SENTINELHUB",
+                "spatial_extent": null,
+                "temporal_extent": null
+            }
+        },
+        "loadcollection3": {
+            "process_id": "load_collection",
+            "arguments": {
+                "bands": [
+                    "SCL"
+                ],
+                "id": "SENTINEL2_L2A_SENTINELHUB",
+                "spatial_extent": null,
+                "temporal_extent": null
+            }
+        },
+        "toscldilationmask1": {
+            "process_id": "to_scl_dilation_mask",
+            "arguments": {
+                "data": {
+                    "from_node": "loadcollection3"
+                },
+                "erosion_kernel_size": 3,
+                "kernel1_size": 17,
+                "kernel2_size": 77,
+                "mask1_values": [
+                    2,
+                    4,
+                    5,
+                    6,
+                    7
+                ],
+                "mask2_values": [
+                    3,
+                    8,
+                    9,
+                    10,
+                    11
+                ]
+            }
+        },
+        "mask1": {
+            "process_id": "mask",
+            "arguments": {
+                "data": {
+                    "from_node": "loadcollection2"
+                },
+                "mask": {
+                    "from_node": "toscldilationmask1"
+                }
+            }
+        },
+        "resamplecubespatial1": {
+            "process_id": "resample_cube_spatial",
+            "arguments": {
+                "data": {
+                    "from_node": "mask1"
+                },
+                "method": "near",
+                "target": {
+                    "from_node": "sarbackscatter1"
+                }
+            }
+        },
+        "reducedimension1": {
+            "process_id": "reduce_dimension",
+            "arguments": {
+                "data": {
+                    "from_node": "resamplecubespatial1"
+                },
+                "dimension": "bands",
+                "reducer": {
+                    "process_graph": {
+                        "runudf1": {
+                            "process_id": "run_udf",
+                            "arguments": {
+                                "context": {
+                                    "biopar": {
+                                        "from_parameter": "biopar_type"
+                                    }
+                                },
+                                "data": {
+                                    "from_parameter": "data"
+                                },
+                                "runtime": "Python",
+                                "udf": "import numpy as np\nfrom typing import Dict\nfrom openeo.udf.xarraydatacube import XarrayDataCube\nfrom biopar.bioparnp import BioParNp\n\n\nbiopar_version = '3band'\n\ndef apply_datacube(cube: XarrayDataCube, context: Dict) -> XarrayDataCube:\n    valid_biopars= ['FAPAR','LAI','FCOVER','CWC','CCC']\n    biopar = context.get(\"biopar\", \"FAPAR\")\n    if biopar not in valid_biopars:\n        biopar = 'FAPAR'\n\n    ds = cube.get_array()\n    ds_date = ds\n\n    from numpy import cos, radians\n    ### LOAD THE DIFFERENT REQUIRED BANDS FOR THE 8-BAND FAPAR\n    scaling_bands = 0.0001\n\n    saa = ds_date.sel(bands='sunAzimuthAngles')\n    sza = ds_date.sel(bands=\"sunZenithAngles\")\n    vaa = ds_date.sel(bands=\"viewAzimuthMean\")\n    vza = ds_date.sel(bands=\"viewZenithMean\")\n\n    B03 = ds_date.sel(bands='B03') * scaling_bands\n    B04 = ds_date.sel(bands='B04') * scaling_bands\n    B8 = ds_date.sel(bands='B08') * scaling_bands\n\n    g1 = cos(radians(vza))\n    g2 = cos(radians(sza))\n    g3 = cos(radians(saa - vaa))\n\n    #### FLATTEN THE ARRAY ####\n    flat = list(map(lambda arr: arr.flatten(),\n                    [B03.values, B04.values,B8.values, g1.values, g2.values, g3.values]))\n    bands = np.array(flat)\n\n    #### CALCULATE THE BIOPAR BASED ON THE BANDS #####\n    image = BioParNp(version='3band', parameter=biopar, singleConfig = True).run(bands, output_scale=1,\n                                                                  output_dtype=np.floating,\n                                                                  minmax_flagging=False)  # netcdf algorithm\n    as_image = image.reshape((g1.shape))\n    ## set nodata to nan\n    as_image[np.where(np.isnan(B03))] = np.nan\n    xr_biopar = vza.copy()\n    xr_biopar.values = as_image\n\n    return XarrayDataCube(xr_biopar)  # xarray.DataArray(as_image,vza.dims,vza.coords)\n\n\n"
+                            },
+                            "result": true
+                        }
+                    }
+                }
+            }
+        },
+        "adddimension1": {
+            "process_id": "add_dimension",
+            "arguments": {
+                "data": {
+                    "from_node": "reducedimension1"
+                },
+                "label": "band_0",
+                "name": "bands",
+                "type": "bands"
+            }
+        },
+        "mergecubes1": {
+            "process_id": "merge_cubes",
+            "arguments": {
+                "cube1": {
+                    "from_node": "sarbackscatter1"
+                },
+                "cube2": {
+                    "from_node": "adddimension1"
+                }
+            }
+        },
+        "arrayelement1": {
+            "process_id": "array_element",
+            "arguments": {
+                "data": {
+                    "from_parameter": "date"
+                },
+                "index": 0
+            }
+        },
+        "dateshift1": {
+            "process_id": "date_shift",
+            "arguments": {
+                "date": {
+                    "from_node": "arrayelement1"
+                },
+                "unit": "day",
+                "value": -90
+            }
+        },
+        "arrayelement2": {
+            "process_id": "array_element",
+            "arguments": {
+                "data": {
+                    "from_parameter": "date"
+                },
+                "index": 1
+            }
+        },
+        "dateshift2": {
+            "process_id": "date_shift",
+            "arguments": {
+                "date": {
+                    "from_node": "arrayelement2"
+                },
+                "unit": "day",
+                "value": 90
+            }
+        },
+        "filtertemporal1": {
+            "process_id": "filter_temporal",
+            "arguments": {
+                "data": {
+                    "from_node": "mergecubes1"
+                },
+                "extent": [
+                    {
+                        "from_node": "dateshift1"
+                    },
+                    {
+                        "from_node": "dateshift2"
+                    }
+                ]
+            }
+        },
+        "runudf2": {
+            "process_id": "run_udf",
+            "arguments": {
+                "context": {
+                    "distance": 10
+                },
+                "data": {
+                    "from_parameter": "polygon"
+                },
+                "runtime": "Python",
+                "udf": "from cropsar import prepare_s2_data_geometry\nfrom openeo.udf import UdfData, FeatureCollection\n                               \ndef fct_buffer(udf_data: UdfData):\n    \n    gdf = udf_data.feature_collection_list[0].data\n                    \n    crs = 'epsg:4326'\n    distance = udf_data.user_context.get('distance', 0)\n    params = {'s2_clean':{'inarrowfieldbordersinmeter':distance}}\n    for i,geom in gdf.iterrows():\n        buffer = prepare_s2_data_geometry(geom['geometry'],params,crs)\n        \n        gdf.at[i,'geometry'] = buffer\n                          \n    udf_data.feature_collection_list = [FeatureCollection(id=\"_\", data=gdf)]\n                    \n    return udf_data"
+            }
+        },
+        "aggregatespatial1": {
+            "process_id": "aggregate_spatial",
+            "arguments": {
+                "data": {
+                    "from_node": "filtertemporal1"
+                },
+                "geometries": {
+                    "from_node": "runudf2"
+                },
+                "reducer": {
+                    "process_graph": {
+                        "mean1": {
+                            "process_id": "mean",
+                            "arguments": {
+                                "data": {
+                                    "from_parameter": "data"
+                                }
+                            },
+                            "result": true
+                        }
+                    }
+                }
+            }
+        },
+        "runudf3": {
+            "process_id": "run_udf",
+            "arguments": {
+                "context": {
+                    "date": {
+                        "from_parameter": "date"
+                    },
+                    "minimal_input_checks": {
+                        "from_parameter": "minimal_input_checks"
+                    }
+                },
+                "data": {
+                    "from_node": "aggregatespatial1"
+                },
+                "runtime": "Python",
+                "udf": "import logging\nfrom openeo.udf.udf_data import UdfData\nfrom openeo.udf.structured_data import StructuredData\nfrom openeo.rest.conversions import timeseries_json_to_pandas\nimport pandas as pd\nimport sys\nfrom cropsar.preprocessing.retrieve_timeseries_openeo import run_cropsar_dataframes\n\n\nlogger = logging.getLogger(\"nextland_services.cropsar\")\n\n\n# calculate the cropsar curve for each field and the regional average of all the input fields\n######## FUNCTIONS ################\ndef get_cropsar_TS(ts_df, unique_ids_fields, metrics_order, time_range, minimal_input_checks=False):\n    index_fAPAR = metrics_order.index('FAPAR')\n    column_indices = ts_df.columns.get_level_values(1)\n    indices = column_indices.isin([index_fAPAR])\n\n    df_S2 = ts_df.loc[:, indices].sort_index().T\n    df_S2 = df_S2.rename(index=dict(enumerate(unique_ids_fields)))\n    if(df_S2.empty):\n        raise ValueError(\"Received an empty Sentinel-2 input dataframe while trying to compute cropSAR!\")\n\n    df_VHVV = ts_df.loc[:, column_indices.isin([metrics_order.index('VH'), metrics_order.index('VV')])].sort_index().T\n    df_VHVV = df_VHVV.rename(index={0: 'vh', 1: 'vv'}, level=1)\n    df_VHVV = df_VHVV.rename(index=dict(enumerate(unique_ids_fields)))\n\n    cropsar_df, cropsar_df_q10, cropsar_df_q90 = run_cropsar_dataframes(\n        df_S2, df_VHVV, date_range=time_range, s2_data_layer='S2_FAPAR', minimal_input_checks=minimal_input_checks\n    )\n\n    if (len(cropsar_df.index) == 0):\n        logger.warning(\"CropSAR returned an empty dataframe. For input, Sentinel-2 input: \")\n        logger.warning(str(df_S2.to_json(indent=2)))\n        logger.warning(\"Sentinel-1 VH-VV: \")\n        logger.warning(str(df_VHVV.to_json(indent=2)))\n\n    cropsar_df = cropsar_df.rename(\n        columns=dict(zip(list(cropsar_df.columns.values), [str(item) + '_cropSAR' for item in unique_ids_fields])))\n    cropsar_df = cropsar_df.round(decimals=3)\n    cropsar_df.index = pd.to_datetime(cropsar_df.index).date\n    cropsar_df = cropsar_df.loc[pd.to_datetime(time_range[0], format = '%Y-%m-%d').date() :pd.to_datetime(time_range[1], format = '%Y-%m-%d').date()]\n    return cropsar_df\n\n\ndef udf_cropsar(udf_data: UdfData):\n    ## constants\n    user_context = udf_data.user_context\n    time_range = user_context.get('date')\n    columns_order = ['VH', 'VV', 'FAPAR']\n    minimal_input_checks = user_context.get('minimal_input_checks')\n\n    ## load the TS\n    ts_dict = udf_data.get_structured_data_list()[0].data\n    if not ts_dict:  # workaround of ts_dict is empty\n        return\n    TS_df = timeseries_json_to_pandas(ts_dict)\n    TS_df.index = pd.to_datetime(TS_df.index).date\n\n\n    if not isinstance(TS_df.columns, pd.MultiIndex):\n        TS_df.columns = pd.MultiIndex.from_product([[0], TS_df.columns])\n\n    amount_fields = next(iter(ts_dict.values()))\n    unique_ids_fields = ['Field_{}'.format(str(p)) for p in range(len(amount_fields))]\n\n\n    logger.info(\"CropSAR input dataframe:\\n\" + str(TS_df.describe()))\n    logger.info(\"Input time range: \" + str(time_range))\n    #logger.warning(str(TS_df.to_json(indent=2,date_format='iso',double_precision=5)))\n\n    ts_df_cropsar = get_cropsar_TS(TS_df, unique_ids_fields, columns_order, time_range, minimal_input_checks=minimal_input_checks)\n    ts_df_cropsar = ts_df_cropsar.round(decimals=3)\n    ts_df_cropsar.index = ts_df_cropsar.index.astype(str)\n\n\n    udf_data.set_structured_data_list(\n        [StructuredData(description='cropsar', data=ts_df_cropsar.to_dict(), type=\"dict\")])\n\n    return udf_data"
+            },
+            "result": true
+        }
+    },
+    "id": "CropSAR",
+    "description": "**CropSAR** is an innovative technique that **uses Sentinel-1 radar observations to augment those of Sentinel-2**. \nBy doing so, a more **continuous vegetation properties monitoring** can be performed, by **including vegetation information for situations at which these properties cannot be retrieved from Sentinel-2** observations due to cloud occurrence.\nThis technique is especially **beneficial to operational agricultural monitoring**, as the **entire crop growth cycle**, in particular the drastic changes during its development, **can be observed**.\n\nThe Sentinel-1 \u03c3<sub>0</sub> backscatter signal contains information on the structure and moisture content of vegetation and the underlying soil. This correlation is demonstrated in **Figure 1**.\nThe CropSAR temporal resolution is defined by the combined revisit rate of Sentinel-1 and cloud-free Sentinel-2 observations. For Belgium and its surroundings (~50<sup>o</sup>N), this is almost every day (because both the ascending and descending tracks for Sentinel-1 are acquired).\n\n![CropSAR Sen-1 Sen-2](https://docs.terrascope.be/Developers/WebServices/fig/CropSAR_S1_S2.png \"CropSAR Sen-1 Sen-2\")\n\t\n\n_**Figure 1:** Sentinel-2 NDVI observations over a winter wheat field and the corresponding Sentinel-1 backscatter signature. While both measurements are completely different, the correlation between optical and radar is clearly visible, especially during the growing season ([van Tricht et al., 2018](https://www.mdpi.com/2072-4292/10/10/1642)). \nNote that during times of limited vegetation cover on the parcel, the radar backscatter is much more noisy, as the signal then reflects mostly the moisture content of the underlying surface._\n \nA more detailed introduction on CropSAR, its working principles and added value is given in [this blog](https://blog.vito.be/remotesensing/cropsar2019).\nThe various CropSAR webservice elements are explained below. \n\n**Note:** CropSAR is intended to provide the augmented Sentinel-1 and -2 vegetation indices for individual agricultural fields. \nAlthough it can be requested over larger areas (e.g. at community level), the added value for such areas will be limited and it will take considerable time for the algorithm to provide you with the results.\n\n**Disclaimer:** Requesting CropSAR in NRT (near real-time) will result in a lower performance of the fAPAR estimates. This lower performance only occurs for the fAPAR estimates in a 3 months period before the real time. ",
+    "parameters": [
+        {
+            "name": "date",
+            "description": "Left-closed temporal interval, i.e. an array with exactly two elements:\n\n1. The first element is the start of the temporal interval. The specified instance in time is **included** in the interval.\n2. The second element is the end of the temporal interval. The specified instance in time is **excluded** from the interval.\n\nThe specified temporal strings follow [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html). Also supports open intervals by setting one of the boundaries to `null`, but never both.",
+            "schema": {
+                "type": "array",
+                "subtype": "temporal-interval",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "format": "date-time",
+                            "subtype": "date-time"
+                        },
+                        {
+                            "type": "string",
+                            "format": "date",
+                            "subtype": "date"
+                        },
+                        {
+                            "type": "string",
+                            "subtype": "year",
+                            "minLength": 4,
+                            "maxLength": 4,
+                            "pattern": "^\\d{4}$"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                },
+                "examples": [
+                    [
+                        "2015-01-01T00:00:00Z",
+                        "2016-01-01T00:00:00Z"
+                    ],
+                    [
+                        "2015-01-01",
+                        "2016-01-01"
+                    ]
+                ]
+            }
+        },
+        {
+            "name": "polygon",
+            "description": "A geojson polygon on which to compute the CropSAR timeseries.",
+            "schema": {
+                "type": "object",
+                "subtype": "geojson"
+            }
+        },
+        {
+            "name": "biopar_type",
+            "description": "BIOPAR type [FAPAR,FCOVER] used to calculate the CropSAR curve on. As default the FAPAR is used",
+            "schema": {
+                "type": "string"
+            },
+            "default": "FAPAR",
+            "optional": true
+        },
+        {
+            "name": "minimal_input_checks",
+            "description": "Optional: by enabling this property, the service will be more forgiving with respect to input data, but may generate unreliable results.",
+            "schema": {
+                "type": "boolean"
+            },
+            "default": false,
+            "optional": true
+        }
+    ],
+    "examples": [
+        {
+            "arguments": {
+                "time_range": [
+                    "2020-02-01",
+                    "2020-12-01"
+                ],
+                "polygon": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [
+                                2.970823,
+                                51.117772
+                            ],
+                            [
+                                2.973034,
+                                51.118145
+                            ],
+                            [
+                                2.974201,
+                                51.116564
+                            ],
+                            [
+                                2.973737,
+                                51.116417
+                            ],
+                            [
+                                2.973671,
+                                51.116352
+                            ],
+                            [
+                                2.973688,
+                                51.11626
+                            ],
+                            [
+                                2.974088,
+                                51.115748
+                            ],
+                            [
+                                2.973778,
+                                51.115665
+                            ],
+                            [
+                                2.973777,
+                                51.115664
+                            ],
+                            [
+                                2.973153,
+                                51.115491
+                            ],
+                            [
+                                2.972811,
+                                51.11547
+                            ],
+                            [
+                                2.970823,
+                                51.117772
+                            ]
+                        ]
+                    ]
+                }
+            },
+            "returns": {
+                "Field_0_cropSAR": {
+                    "2020-02-01": 0.9301172494888306,
+                    "2020-02-02": 0.9315246343612671,
+                    "2020-02-03": 0.9324730634689331,
+                    "2020-02-04": 0.9329112768173218,
+                    "2020-02-05": 0.9325883984565735,
+                    "2020-02-06": 0.931118369102478,
+                    "2020-02-07": 0.927969217300415,
+                    "2020-02-08": 0.9248553514480591,
+                    "2020-02-09": 0.9217768907546997,
+                    "2020-02-10": 0.9179251194000244,
+                    "2020-02-11": 0.913640022277832,
+                    "2020-02-12": 0.9095489978790283,
+                    "2020-02-13": 0.9066181182861328,
+                    "2020-02-14": 0.9050941467285156,
+                    "2020-02-15": 0.9048548340797424,
+                    "2020-02-16": 0.904588520526886,
+                    "2020-02-17": 0.90351402759552,
+                    "2020-02-18": 0.9021998643875122,
+                    "2020-02-19": 0.9011940956115723,
+                    "2020-02-20": 0.9017857313156128,
+                    "2020-02-21": 0.904306173324585,
+                    "2020-02-22": 0.9070756435394287,
+                    "2020-02-23": 0.9081984162330627,
+                    "2020-02-24": 0.9083003401756287,
+                    "2020-02-25": 0.9046710729598999,
+                    "2020-02-26": 0.903674840927124,
+                    "2020-02-27": 0.9086235761642456,
+                    "2020-02-28": 0.9106292724609375,
+                    "2020-02-29": 0.9139195680618286,
+                    "2020-03-01": 0.9247603416442871,
+                    "2020-03-02": 0.9353123307228088,
+                    "2020-03-03": 0.941375732421875,
+                    "2020-03-04": 0.9416886568069458,
+                    "2020-03-05": 0.9436155557632446,
+                    "2020-03-06": 0.9458191990852356,
+                    "2020-03-07": 0.9398554563522339,
+                    "2020-03-08": 0.9322232007980347,
+                    "2020-03-09": 0.926548957824707,
+                    "2020-03-10": 0.9237639904022217,
+                    "2020-03-11": 0.9205986261367798,
+                    "2020-03-12": 0.9151399731636047,
+                    "2020-03-13": 0.9163077473640442,
+                    "2020-03-14": 0.9172636866569519,
+                    "2020-03-15": 0.9184682369232178,
+                    "2020-03-16": 0.9190995693206787,
+                    "2020-03-17": 0.921768307685852,
+                    "2020-03-18": 0.9274771213531494,
+                    "2020-03-19": 0.9329513311386108,
+                    "2020-03-20": 0.9339643716812134,
+                    "2020-03-21": 0.9318870306015015,
+                    "2020-03-22": 0.9289504289627075,
+                    "2020-03-23": 0.9331459999084473,
+                    "2020-03-24": 0.9359114766120911,
+                    "2020-03-25": 0.9369068741798401,
+                    "2020-03-26": 0.934898853302002,
+                    "2020-03-27": 0.9272109866142273,
+                    "2020-03-28": 0.9175852537155151,
+                    "2020-03-29": 0.9078340530395508,
+                    "2020-03-30": 0.9012933969497681,
+                    "2020-03-31": 0.8966124653816223,
+                    "2020-04-01": 0.8928114175796509,
+                    "2020-04-02": 0.8922381401062012,
+                    "2020-04-03": 0.889781653881073,
+                    "2020-04-04": 0.8878082633018494,
+                    "2020-04-05": 0.8879178762435913,
+                    "2020-04-06": 0.8895174264907837,
+                    "2020-04-07": 0.8938865661621094,
+                    "2020-04-08": 0.8994402885437012,
+                    "2020-04-09": 0.9023783206939697,
+                    "2020-04-10": 0.9057377576828003,
+                    "2020-04-11": 0.9110373258590698,
+                    "2020-04-12": 0.9142366051673889,
+                    "2020-04-13": 0.9172369241714478,
+                    "2020-04-14": 0.923198938369751,
+                    "2020-04-15": 0.9229388236999512,
+                    "2020-04-16": 0.9306694269180298,
+                    "2020-04-17": 0.9447451829910278,
+                    "2020-04-18": 0.9585520029067993,
+                    "2020-04-19": 0.964794397354126,
+                    "2020-04-20": 0.9641287326812744,
+                    "2020-04-21": 0.9624106287956238,
+                    "2020-04-22": 0.9584100246429443,
+                    "2020-04-23": 0.9534231424331665,
+                    "2020-04-24": 0.9488453269004822,
+                    "2020-04-25": 0.9436968564987183,
+                    "2020-04-26": 0.9413712024688721,
+                    "2020-04-27": 0.9415469169616699,
+                    "2020-04-28": 0.9432353973388672,
+                    "2020-04-29": 0.9462177753448486,
+                    "2020-04-30": 0.9411990642547607,
+                    "2020-05-01": 0.9390549659729004,
+                    "2020-05-02": 0.9424729347229004,
+                    "2020-05-03": 0.9477380514144897,
+                    "2020-05-04": 0.948940634727478,
+                    "2020-05-05": 0.9392673969268799,
+                    "2020-05-06": 0.9120173454284668,
+                    "2020-05-07": 0.8399393558502197,
+                    "2020-05-08": 0.7249807715415955,
+                    "2020-05-09": 0.5400038361549377,
+                    "2020-05-10": 0.3784680664539337,
+                    "2020-05-11": 0.27807754278182983,
+                    "2020-05-12": 0.20565402507781982,
+                    "2020-05-13": 0.1662798523902893,
+                    "2020-05-14": 0.1319076120853424,
+                    "2020-05-15": 0.11001729965209961,
+                    "2020-05-16": 0.09714090824127197,
+                    "2020-05-17": 0.09827426075935364,
+                    "2020-05-18": 0.10803601145744324,
+                    "2020-05-19": 0.11870139837265015,
+                    "2020-05-20": 0.12507659196853638,
+                    "2020-05-21": 0.12847280502319336,
+                    "2020-05-22": 0.13450050354003906,
+                    "2020-05-23": 0.13595998287200928,
+                    "2020-05-24": 0.13203412294387817,
+                    "2020-05-25": 0.12721258401870728,
+                    "2020-05-26": 0.12340927124023438,
+                    "2020-05-27": 0.12178832292556763,
+                    "2020-05-28": 0.1222265362739563,
+                    "2020-05-29": 0.1279909312725067,
+                    "2020-05-30": 0.13891372084617615,
+                    "2020-05-31": 0.151289165019989,
+                    "2020-06-01": 0.16304552555084229,
+                    "2020-06-02": 0.16880565881729126,
+                    "2020-06-03": 0.16983124613761902,
+                    "2020-06-04": 0.171558678150177,
+                    "2020-06-05": 0.17390719056129456,
+                    "2020-06-06": 0.17619508504867554,
+                    "2020-06-07": 0.17853900790214539,
+                    "2020-06-08": 0.18143224716186523,
+                    "2020-06-09": 0.1854247748851776,
+                    "2020-06-10": 0.1907983422279358,
+                    "2020-06-11": 0.19384443759918213,
+                    "2020-06-12": 0.19326967000961304,
+                    "2020-06-13": 0.19446247816085815,
+                    "2020-06-14": 0.19703006744384766,
+                    "2020-06-15": 0.20050600171089172,
+                    "2020-06-16": 0.2052111029624939,
+                    "2020-06-17": 0.20886045694351196,
+                    "2020-06-18": 0.2155490517616272,
+                    "2020-06-19": 0.22261303663253784,
+                    "2020-06-20": 0.22852951288223267,
+                    "2020-06-21": 0.23095378279685974,
+                    "2020-06-22": 0.2313879132270813,
+                    "2020-06-23": 0.23471230268478394,
+                    "2020-06-24": 0.24360457062721252,
+                    "2020-06-25": 0.2599620819091797,
+                    "2020-06-26": 0.27921587228775024,
+                    "2020-06-27": 0.31580308079719543,
+                    "2020-06-28": 0.3617948889732361,
+                    "2020-06-29": 0.4027778208255768,
+                    "2020-06-30": 0.44273048639297485,
+                    "2020-07-01": 0.47150760889053345,
+                    "2020-07-02": 0.5007685422897339,
+                    "2020-07-03": 0.5372020602226257,
+                    "2020-07-04": 0.5764315724372864,
+                    "2020-07-05": 0.6198479533195496,
+                    "2020-07-06": 0.653388261795044,
+                    "2020-07-07": 0.6749441623687744,
+                    "2020-07-08": 0.6913940906524658,
+                    "2020-07-09": 0.7070055603981018,
+                    "2020-07-10": 0.7228952646255493,
+                    "2020-07-11": 0.7357632517814636,
+                    "2020-07-12": 0.7509465217590332,
+                    "2020-07-13": 0.7665412425994873,
+                    "2020-07-14": 0.7805291414260864,
+                    "2020-07-15": 0.7924813032150269,
+                    "2020-07-16": 0.8039877414703369,
+                    "2020-07-17": 0.8147063255310059,
+                    "2020-07-18": 0.8238919973373413,
+                    "2020-07-19": 0.8318462371826172,
+                    "2020-07-20": 0.8376286625862122,
+                    "2020-07-21": 0.8409647941589355,
+                    "2020-07-22": 0.842535674571991,
+                    "2020-07-23": 0.8398553133010864,
+                    "2020-07-24": 0.8363509774208069,
+                    "2020-07-25": 0.8328554034233093,
+                    "2020-07-26": 0.8339532613754272,
+                    "2020-07-27": 0.8439714312553406,
+                    "2020-07-28": 0.8574625849723816,
+                    "2020-07-29": 0.870771050453186,
+                    "2020-07-30": 0.8818651437759399,
+                    "2020-07-31": 0.8889550566673279,
+                    "2020-08-01": 0.8959001302719116,
+                    "2020-08-02": 0.9059389233589172,
+                    "2020-08-03": 0.9119123220443726,
+                    "2020-08-04": 0.9163476824760437,
+                    "2020-08-05": 0.9175513982772827,
+                    "2020-08-06": 0.9155294299125671,
+                    "2020-08-07": 0.908039391040802,
+                    "2020-08-08": 0.8995950222015381,
+                    "2020-08-09": 0.8894928693771362,
+                    "2020-08-10": 0.8795337080955505,
+                    "2020-08-11": 0.8681273460388184,
+                    "2020-08-12": 0.8627453446388245,
+                    "2020-08-13": 0.8518123030662537,
+                    "2020-08-14": 0.8427334427833557,
+                    "2020-08-15": 0.8364594578742981,
+                    "2020-08-16": 0.8326276540756226,
+                    "2020-08-17": 0.8303433656692505,
+                    "2020-08-18": 0.8275155425071716,
+                    "2020-08-19": 0.8267444372177124,
+                    "2020-08-20": 0.8254973888397217,
+                    "2020-08-21": 0.8240251541137695,
+                    "2020-08-22": 0.8199451565742493,
+                    "2020-08-23": 0.8215050101280212,
+                    "2020-08-24": 0.8277484774589539,
+                    "2020-08-25": 0.8273541927337646,
+                    "2020-08-26": 0.822806179523468,
+                    "2020-08-27": 0.8214328289031982,
+                    "2020-08-28": 0.8162775039672852,
+                    "2020-08-29": 0.8077679872512817,
+                    "2020-08-30": 0.7987524271011353,
+                    "2020-08-31": 0.7918552756309509,
+                    "2020-09-01": 0.7929844856262207,
+                    "2020-09-02": 0.798778772354126,
+                    "2020-09-03": 0.8075199127197266,
+                    "2020-09-04": 0.8187112212181091,
+                    "2020-09-05": 0.831092119216919,
+                    "2020-09-06": 0.8425397872924805,
+                    "2020-09-07": 0.8509886860847473,
+                    "2020-09-08": 0.8554449677467346,
+                    "2020-09-09": 0.8600935935974121,
+                    "2020-09-10": 0.8649993538856506,
+                    "2020-09-11": 0.8707392811775208,
+                    "2020-09-12": 0.8787002563476562,
+                    "2020-09-13": 0.880570650100708,
+                    "2020-09-14": 0.8833988904953003,
+                    "2020-09-15": 0.8850821256637573,
+                    "2020-09-16": 0.8826310038566589,
+                    "2020-09-17": 0.877289891242981,
+                    "2020-09-18": 0.8681434392929077,
+                    "2020-09-19": 0.8642889261245728,
+                    "2020-09-20": 0.8599662184715271,
+                    "2020-09-21": 0.8519018888473511,
+                    "2020-09-22": 0.8388810753822327,
+                    "2020-09-23": 0.8292469382286072,
+                    "2020-09-24": 0.819514274597168,
+                    "2020-09-25": 0.8054684400558472,
+                    "2020-09-26": 0.7928160429000854,
+                    "2020-09-27": 0.7883403301239014,
+                    "2020-09-28": 0.783637523651123,
+                    "2020-09-29": 0.7807203531265259,
+                    "2020-09-30": 0.7768341898918152,
+                    "2020-10-01": 0.7706105709075928,
+                    "2020-10-02": 0.7587882280349731,
+                    "2020-10-03": 0.7010947465896606,
+                    "2020-10-04": 0.5773261189460754,
+                    "2020-10-05": 0.4210808277130127,
+                    "2020-10-06": 0.2997877895832062,
+                    "2020-10-07": 0.22857075929641724,
+                    "2020-10-08": 0.19383877515792847,
+                    "2020-10-09": 0.18381577730178833,
+                    "2020-10-10": 0.1809331178665161,
+                    "2020-10-11": 0.17795458436012268,
+                    "2020-10-12": 0.1748288869857788,
+                    "2020-10-13": 0.17302030324935913,
+                    "2020-10-14": 0.1723536252975464,
+                    "2020-10-15": 0.1726280152797699,
+                    "2020-10-16": 0.17372378706932068,
+                    "2020-10-17": 0.17568260431289673,
+                    "2020-10-18": 0.17886334657669067,
+                    "2020-10-19": 0.1816536784172058,
+                    "2020-10-20": 0.18324804306030273,
+                    "2020-10-21": 0.18301606178283691,
+                    "2020-10-22": 0.18076419830322266,
+                    "2020-10-23": 0.17854389548301697,
+                    "2020-10-24": 0.17655730247497559,
+                    "2020-10-25": 0.17636701464653015,
+                    "2020-10-26": 0.179514080286026,
+                    "2020-10-27": 0.1856159269809723,
+                    "2020-10-28": 0.1920701265335083,
+                    "2020-10-29": 0.19537043571472168,
+                    "2020-10-30": 0.19463002681732178,
+                    "2020-10-31": 0.19231849908828735,
+                    "2020-11-01": 0.18412911891937256,
+                    "2020-11-02": 0.1772603988647461,
+                    "2020-11-03": 0.1739283800125122,
+                    "2020-11-04": 0.1729610562324524,
+                    "2020-11-05": 0.17277473211288452,
+                    "2020-11-06": 0.17163580656051636,
+                    "2020-11-07": 0.16737091541290283,
+                    "2020-11-08": 0.16121602058410645,
+                    "2020-11-09": 0.1566537320613861,
+                    "2020-11-10": 0.15519630908966064,
+                    "2020-11-11": 0.15318113565444946,
+                    "2020-11-12": 0.15330982208251953,
+                    "2020-11-13": 0.1593095064163208,
+                    "2020-11-14": 0.16503041982650757,
+                    "2020-11-15": 0.1704522967338562,
+                    "2020-11-16": 0.178063303232193,
+                    "2020-11-17": 0.18510553240776062,
+                    "2020-11-18": 0.19141101837158203,
+                    "2020-11-19": 0.196976900100708,
+                    "2020-11-20": 0.20146822929382324,
+                    "2020-11-21": 0.20457664132118225,
+                    "2020-11-22": 0.20621156692504883,
+                    "2020-11-23": 0.20585083961486816,
+                    "2020-11-24": 0.20375406742095947,
+                    "2020-11-25": 0.20054233074188232,
+                    "2020-11-26": 0.19728511571884155,
+                    "2020-11-27": 0.19517940282821655,
+                    "2020-11-28": 0.1950991451740265,
+                    "2020-11-29": 0.19690439105033875,
+                    "2020-11-30": 0.19987109303474426,
+                    "2020-12-01": 0.2064761221408844
+                }
+            }
+        }
+    ]
+}
