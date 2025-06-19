@@ -1,0 +1,196 @@
+{
+  "process_graph": {
+    "loadcollection1": {
+      "process_id": "load_collection",
+      "arguments": {
+        "bands": [
+          {
+            "from_parameter": "band08"
+          },
+          {
+            "from_parameter": "band11"
+          },
+          {
+            "from_parameter": "band_classification"
+          }
+        ],
+        "id": {
+          "from_parameter": "collection_id"
+        },
+        "spatial_extent": null,
+        "temporal_extent": null
+      }
+    },
+    "maskscldilation1": {
+      "process_id": "mask_scl_dilation",
+      "arguments": {
+        "data": {
+          "from_node": "loadcollection1"
+        },
+        "scl_band_name": {
+          "from_parameter": "band_classification"
+        }
+      }
+    },
+    "reducedimension1": {
+      "process_id": "reduce_dimension",
+      "arguments": {
+        "data": {
+          "from_node": "maskscldilation1"
+        },
+        "dimension": "bands",
+        "reducer": {
+          "process_graph": {
+            "arrayelement1": {
+              "process_id": "array_element",
+              "arguments": {
+                "data": {
+                  "from_parameter": "data"
+                },
+                "index": 1
+              }
+            },
+            "arrayelement2": {
+              "process_id": "array_element",
+              "arguments": {
+                "data": {
+                  "from_parameter": "data"
+                },
+                "index": 0
+              }
+            },
+            "divide1": {
+              "process_id": "divide",
+              "arguments": {
+                "x": {
+                  "from_node": "arrayelement1"
+                },
+                "y": {
+                  "from_node": "arrayelement2"
+                }
+              },
+              "result": true
+            }
+          }
+        }
+      }
+    },
+    "filtertemporal1": {
+      "process_id": "filter_temporal",
+      "arguments": {
+        "data": {
+          "from_node": "reducedimension1"
+        },
+        "extent": {
+          "from_parameter": "date"
+        }
+      }
+    },
+    "maskpolygon1": {
+      "process_id": "mask_polygon",
+      "arguments": {
+        "data": {
+          "from_node": "filtertemporal1"
+        },
+        "mask": {
+          "from_parameter": "polygon"
+        }
+      },
+      "result": true
+    }
+  },
+  "id": "MSI",
+  "summary": "MSI calculation",
+  "description": "# Moisture Stress Index\nCalculate MSI for an area specifying collection and bands and/or time period.\n\nThe MSI is a reflectance measurement, sensitive to increases in leaf water content.\n\nAs water content in vegetation canopy leaves increases, the absorbtion at wavelengths \naround 1599 nm also increases. Absorption at 819nm is used as a reference, \nsince it\u2019s nearly unaffected by changes in water content. Applications of the \nMSI include canopy stress analysis, productivity prediction and modelling, \nfire hazard analysis, and studies of ecosystem physiology. The index is \ninverted relative to the other water vegetation indices; higher values indicate \ngreater water stress and less water content.\n\n[Link]https://www.sciencedirect.com/science/article/pii/S0034425718303742",
+  "parameters": [
+    {
+      "name": "collection_id",
+      "description": "The openEO collecion_id for (Sentinel-2) input. ",
+      "schema": {
+        "type": "string",
+        "subtype": "collection-id"
+      },
+      "default": "SENTINEL2_L2A",
+      "optional": true
+    },
+    {
+      "name": "band08",
+      "description": "Band name of Sentinel-2 band 08",
+      "schema": {
+        "type": "string"
+      },
+      "default": "B08",
+      "optional": true
+    },
+    {
+      "name": "band11",
+      "description": "Band name of Sentinel-2 band 11",
+      "schema": {
+        "type": "string"
+      },
+      "default": "B11",
+      "optional": true
+    },
+    {
+      "name": "band_classification",
+      "description": "Band name of the scene classification band",
+      "schema": {
+        "type": "string"
+      },
+      "default": "SCL",
+      "optional": true
+    },
+    {
+      "name": "date",
+      "description": "Left-closed temporal interval, i.e. an array with exactly two elements:\n\n1. The first element is the start of the temporal interval. The specified instance in time is **included** in the interval.\n2. The second element is the end of the temporal interval. The specified instance in time is **excluded** from the interval.\n\nThe specified temporal strings follow [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html). Also supports open intervals by setting one of the boundaries to `null`, but never both.",
+      "schema": {
+        "type": "array",
+        "subtype": "temporal-interval",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "subtype": "date-time"
+            },
+            {
+              "type": "string",
+              "format": "date",
+              "subtype": "date"
+            },
+            {
+              "type": "string",
+              "subtype": "year",
+              "minLength": 4,
+              "maxLength": 4,
+              "pattern": "^\\d{4}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "examples": [
+          [
+            "2015-01-01T00:00:00Z",
+            "2016-01-01T00:00:00Z"
+          ],
+          [
+            "2015-01-01",
+            "2016-01-01"
+          ]
+        ]
+      }
+    },
+    {
+      "name": "polygon",
+      "description": "Polygon for which to compute MSI, specified as GEOJSON.",
+      "schema": {
+        "type": "object",
+        "subtype": "geojson"
+      }
+    }
+  ]
+}
