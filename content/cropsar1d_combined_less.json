@@ -1,0 +1,734 @@
+{
+    "process_graph": {
+        "vectorbuffer1": {
+            "process_id": "vector_buffer",
+            "arguments": {
+                "distance": -10,
+                "geometry": {
+                    "from_parameter": "geometry"
+                },
+                "unit": "meter"
+            }
+        },
+        "arrayelement1": {
+            "process_id": "array_element",
+            "arguments": {
+                "data": {
+                    "from_parameter": "temporal_extent"
+                },
+                "index": 0
+            }
+        },
+        "dateshift1": {
+            "process_id": "date_shift",
+            "arguments": {
+                "date": {
+                    "from_node": "arrayelement1"
+                },
+                "unit": "day",
+                "value": -80
+            }
+        },
+        "arrayelement2": {
+            "process_id": "array_element",
+            "arguments": {
+                "data": {
+                    "from_parameter": "temporal_extent"
+                },
+                "index": 1
+            }
+        },
+        "dateshift2": {
+            "process_id": "date_shift",
+            "arguments": {
+                "date": {
+                    "from_node": "arrayelement2"
+                },
+                "unit": "day",
+                "value": 80
+            }
+        },
+        "loadcollection1": {
+            "process_id": "load_collection",
+            "arguments": {
+                "bands": [
+                    "VH",
+                    "VV"
+                ],
+                "id": "SENTINEL1_GRD",
+                "properties": {
+                    "sat:orbit_state": {
+                        "process_graph": {
+                            "eq1": {
+                                "process_id": "eq",
+                                "arguments": {
+                                    "x": {
+                                        "from_parameter": "value"
+                                    },
+                                    "y": "ASCENDING"
+                                },
+                                "result": true
+                            }
+                        }
+                    },
+                    "polarisation": {
+                        "process_graph": {
+                            "eq2": {
+                                "process_id": "eq",
+                                "arguments": {
+                                    "x": {
+                                        "from_parameter": "value"
+                                    },
+                                    "y": "VV&VH"
+                                },
+                                "result": true
+                            }
+                        }
+                    }
+                },
+                "spatial_extent": {
+                    "from_node": "vectorbuffer1"
+                },
+                "temporal_extent": [
+                    {
+                        "from_node": "dateshift1"
+                    },
+                    {
+                        "from_node": "dateshift2"
+                    }
+                ]
+            }
+        },
+        "sarbackscatter1": {
+            "process_id": "sar_backscatter",
+            "arguments": {
+                "coefficient": "sigma0-ellipsoid",
+                "contributing_area": false,
+                "data": {
+                    "from_node": "loadcollection1"
+                },
+                "elevation_model": "COPERNICUS_30",
+                "ellipsoid_incidence_angle": false,
+                "local_incidence_angle": false,
+                "mask": false,
+                "noise_removal": true
+            }
+        },
+        "loadcollection2": {
+            "process_id": "load_collection",
+            "arguments": {
+                "bands": [
+                    "VH",
+                    "VV"
+                ],
+                "id": "SENTINEL1_GRD",
+                "properties": {
+                    "sat:orbit_state": {
+                        "process_graph": {
+                            "eq3": {
+                                "process_id": "eq",
+                                "arguments": {
+                                    "x": {
+                                        "from_parameter": "value"
+                                    },
+                                    "y": "DESCENDING"
+                                },
+                                "result": true
+                            }
+                        }
+                    },
+                    "polarisation": {
+                        "process_graph": {
+                            "eq4": {
+                                "process_id": "eq",
+                                "arguments": {
+                                    "x": {
+                                        "from_parameter": "value"
+                                    },
+                                    "y": "VV&VH"
+                                },
+                                "result": true
+                            }
+                        }
+                    }
+                },
+                "spatial_extent": {
+                    "from_node": "vectorbuffer1"
+                },
+                "temporal_extent": [
+                    {
+                        "from_node": "dateshift1"
+                    },
+                    {
+                        "from_node": "dateshift2"
+                    }
+                ]
+            }
+        },
+        "sarbackscatter2": {
+            "process_id": "sar_backscatter",
+            "arguments": {
+                "coefficient": "sigma0-ellipsoid",
+                "contributing_area": false,
+                "data": {
+                    "from_node": "loadcollection2"
+                },
+                "elevation_model": "COPERNICUS_30",
+                "ellipsoid_incidence_angle": false,
+                "local_incidence_angle": false,
+                "mask": false,
+                "noise_removal": true
+            }
+        },
+        "mergecubes1": {
+            "process_id": "merge_cubes",
+            "arguments": {
+                "cube1": {
+                    "from_node": "sarbackscatter1"
+                },
+                "cube2": {
+                    "from_node": "sarbackscatter2"
+                },
+                "overlap_resolver": {
+                    "process_graph": {
+                        "max1": {
+                            "process_id": "max",
+                            "arguments": {
+                                "data": [
+                                    {
+                                        "from_parameter": "x"
+                                    },
+                                    {
+                                        "from_parameter": "y"
+                                    }
+                                ]
+                            },
+                            "result": true
+                        }
+                    }
+                }
+            }
+        },
+        "loadcollection3": {
+            "process_id": "load_collection",
+            "arguments": {
+                "bands": [
+                    "B04",
+                    "B08"
+                ],
+                "id": "SENTINEL2_L2A",
+                "properties": {
+                    "eo:cloud_cover": {
+                        "process_graph": {
+                            "lte1": {
+                                "process_id": "lte",
+                                "arguments": {
+                                    "x": {
+                                        "from_parameter": "value"
+                                    },
+                                    "y": 95
+                                },
+                                "result": true
+                            }
+                        }
+                    }
+                },
+                "spatial_extent": {
+                    "from_node": "vectorbuffer1"
+                },
+                "temporal_extent": [
+                    {
+                        "from_node": "dateshift1"
+                    },
+                    {
+                        "from_node": "dateshift2"
+                    }
+                ]
+            }
+        },
+        "loadcollection4": {
+            "process_id": "load_collection",
+            "arguments": {
+                "bands": [
+                    "SCL"
+                ],
+                "id": "SENTINEL2_L2A",
+                "properties": {
+                    "eo:cloud_cover": {
+                        "process_graph": {
+                            "lte2": {
+                                "process_id": "lte",
+                                "arguments": {
+                                    "x": {
+                                        "from_parameter": "value"
+                                    },
+                                    "y": 95
+                                },
+                                "result": true
+                            }
+                        }
+                    }
+                },
+                "spatial_extent": {
+                    "from_node": "vectorbuffer1"
+                },
+                "temporal_extent": [
+                    {
+                        "from_node": "dateshift1"
+                    },
+                    {
+                        "from_node": "dateshift2"
+                    }
+                ]
+            }
+        },
+        "toscldilationmask1": {
+            "process_id": "to_scl_dilation_mask",
+            "arguments": {
+                "data": {
+                    "from_node": "loadcollection4"
+                },
+                "erosion_kernel_size": 3,
+                "kernel1_size": 17,
+                "kernel2_size": 77,
+                "mask1_values": [
+                    2,
+                    4,
+                    5,
+                    6,
+                    7
+                ],
+                "mask2_values": [
+                    3,
+                    8,
+                    9,
+                    10,
+                    11
+                ]
+            }
+        },
+        "mask1": {
+            "process_id": "mask",
+            "arguments": {
+                "data": {
+                    "from_node": "loadcollection3"
+                },
+                "mask": {
+                    "from_node": "toscldilationmask1"
+                }
+            }
+        },
+        "ndvi1": {
+            "process_id": "ndvi",
+            "arguments": {
+                "data": {
+                    "from_node": "mask1"
+                },
+                "nir": "B08",
+                "red": "B04",
+                "target_band": "NDVI"
+            }
+        },
+        "filterbands1": {
+            "process_id": "filter_bands",
+            "arguments": {
+                "bands": [
+                    "NDVI"
+                ],
+                "data": {
+                    "from_node": "ndvi1"
+                }
+            }
+        },
+        "BIOPAR1": {
+            "process_id": "BIOPAR",
+            "arguments": {
+                "biopar_type": "FCOVER",
+                "date": [
+                    {
+                        "from_node": "dateshift1"
+                    },
+                    {
+                        "from_node": "dateshift2"
+                    }
+                ],
+                "polygon": {
+                    "from_node": "vectorbuffer1"
+                }
+            },
+            "namespace": "https://openeo.dataspace.copernicus.eu/openeo/processes/u:29ac8c0d-e6b4-4e50-9a9b-deeeb2f3684a/BIOPAR"
+        },
+        "loadcollection5": {
+            "process_id": "load_collection",
+            "arguments": {
+                "bands": [
+                    "SCL"
+                ],
+                "id": "SENTINEL2_L2A",
+                "properties": {
+                    "eo:cloud_cover": {
+                        "process_graph": {
+                            "lte3": {
+                                "process_id": "lte",
+                                "arguments": {
+                                    "x": {
+                                        "from_parameter": "value"
+                                    },
+                                    "y": 95
+                                },
+                                "result": true
+                            }
+                        }
+                    }
+                },
+                "spatial_extent": {
+                    "from_node": "vectorbuffer1"
+                },
+                "temporal_extent": [
+                    {
+                        "from_node": "dateshift1"
+                    },
+                    {
+                        "from_node": "dateshift2"
+                    }
+                ]
+            }
+        },
+        "toscldilationmask2": {
+            "process_id": "to_scl_dilation_mask",
+            "arguments": {
+                "data": {
+                    "from_node": "loadcollection5"
+                },
+                "erosion_kernel_size": 3,
+                "kernel1_size": 17,
+                "kernel2_size": 77,
+                "mask1_values": [
+                    2,
+                    4,
+                    5,
+                    6,
+                    7
+                ],
+                "mask2_values": [
+                    3,
+                    8,
+                    9,
+                    10,
+                    11
+                ]
+            }
+        },
+        "mask2": {
+            "process_id": "mask",
+            "arguments": {
+                "data": {
+                    "from_node": "BIOPAR1"
+                },
+                "mask": {
+                    "from_node": "toscldilationmask2"
+                }
+            }
+        },
+        "BIOPAR2": {
+            "process_id": "BIOPAR",
+            "arguments": {
+                "biopar_type": "FAPAR",
+                "date": [
+                    {
+                        "from_node": "dateshift1"
+                    },
+                    {
+                        "from_node": "dateshift2"
+                    }
+                ],
+                "polygon": {
+                    "from_node": "vectorbuffer1"
+                }
+            },
+            "namespace": "https://openeo.dataspace.copernicus.eu/openeo/processes/u:29ac8c0d-e6b4-4e50-9a9b-deeeb2f3684a/BIOPAR"
+        },
+        "loadcollection6": {
+            "process_id": "load_collection",
+            "arguments": {
+                "bands": [
+                    "SCL"
+                ],
+                "id": "SENTINEL2_L2A",
+                "properties": {
+                    "eo:cloud_cover": {
+                        "process_graph": {
+                            "lte4": {
+                                "process_id": "lte",
+                                "arguments": {
+                                    "x": {
+                                        "from_parameter": "value"
+                                    },
+                                    "y": 95
+                                },
+                                "result": true
+                            }
+                        }
+                    }
+                },
+                "spatial_extent": {
+                    "from_node": "vectorbuffer1"
+                },
+                "temporal_extent": [
+                    {
+                        "from_node": "dateshift1"
+                    },
+                    {
+                        "from_node": "dateshift2"
+                    }
+                ]
+            }
+        },
+        "toscldilationmask3": {
+            "process_id": "to_scl_dilation_mask",
+            "arguments": {
+                "data": {
+                    "from_node": "loadcollection6"
+                },
+                "erosion_kernel_size": 3,
+                "kernel1_size": 17,
+                "kernel2_size": 77,
+                "mask1_values": [
+                    2,
+                    4,
+                    5,
+                    6,
+                    7
+                ],
+                "mask2_values": [
+                    3,
+                    8,
+                    9,
+                    10,
+                    11
+                ]
+            }
+        },
+        "mask3": {
+            "process_id": "mask",
+            "arguments": {
+                "data": {
+                    "from_node": "BIOPAR2"
+                },
+                "mask": {
+                    "from_node": "toscldilationmask3"
+                }
+            }
+        },
+        "eq5": {
+            "process_id": "eq",
+            "arguments": {
+                "case_sensitive": false,
+                "x": {
+                    "from_parameter": "output"
+                },
+                "y": "fapar"
+            }
+        },
+        "if1": {
+            "process_id": "if",
+            "arguments": {
+                "accept": {
+                    "from_node": "mask3"
+                },
+                "reject": null,
+                "value": {
+                    "from_node": "eq5"
+                }
+            }
+        },
+        "eq6": {
+            "process_id": "eq",
+            "arguments": {
+                "case_sensitive": false,
+                "x": {
+                    "from_parameter": "output"
+                },
+                "y": "fcover"
+            }
+        },
+        "if2": {
+            "process_id": "if",
+            "arguments": {
+                "accept": {
+                    "from_node": "mask2"
+                },
+                "reject": {
+                    "from_node": "if1"
+                },
+                "value": {
+                    "from_node": "eq6"
+                }
+            }
+        },
+        "mergecubes2": {
+            "process_id": "merge_cubes",
+            "arguments": {
+                "cube1": {
+                    "from_node": "if2"
+                },
+                "cube2": {
+                    "from_node": "filterbands1"
+                }
+            }
+        },
+        "eq7": {
+            "process_id": "eq",
+            "arguments": {
+                "case_sensitive": false,
+                "x": {
+                    "from_parameter": "output"
+                },
+                "y": "ndvi"
+            }
+        },
+        "if3": {
+            "process_id": "if",
+            "arguments": {
+                "accept": {
+                    "from_node": "filterbands1"
+                },
+                "reject": {
+                    "from_node": "mergecubes2"
+                },
+                "value": {
+                    "from_node": "eq7"
+                }
+            }
+        },
+        "resamplecubespatial1": {
+            "process_id": "resample_cube_spatial",
+            "arguments": {
+                "data": {
+                    "from_node": "mergecubes1"
+                },
+                "target": {
+                    "from_node": "if3"
+                }
+            }
+        },
+        "mergecubes3": {
+            "process_id": "merge_cubes",
+            "arguments": {
+                "cube1": {
+                    "from_node": "resamplecubespatial1"
+                },
+                "cube2": {
+                    "from_node": "if3"
+                }
+            }
+        },
+        "aggregatespatial1": {
+            "process_id": "aggregate_spatial",
+            "arguments": {
+                "data": {
+                    "from_node": "mergecubes3"
+                },
+                "geometries": {
+                    "from_node": "vectorbuffer1"
+                },
+                "reducer": {
+                    "process_graph": {
+                        "mean1": {
+                            "process_id": "mean",
+                            "arguments": {
+                                "data": {
+                                    "from_parameter": "data"
+                                }
+                            },
+                            "result": true
+                        }
+                    }
+                }
+            }
+        },
+        "runudf1": {
+            "process_id": "run_udf",
+            "arguments": {
+                "context": {
+                    "date": {
+                        "from_parameter": "temporal_extent"
+                    },
+                    "minimal_input_checks": {
+                        "from_parameter": "minimal_input_checks"
+                    }
+                },
+                "data": {
+                    "from_node": "aggregatespatial1"
+                },
+                "runtime": "Python",
+                "udf": "import logging\nfrom openeo.udf.udf_data import UdfData\nfrom openeo.udf.structured_data import StructuredData\nfrom openeo.rest.conversions import timeseries_json_to_pandas\nimport pandas as pd\nimport sys\nfrom datetime import datetime, timedelta\n\nfrom cropsar.preprocessing.retrieve_timeseries_openeo import run_cropsar_dataframes\n\n\nlogger = logging.getLogger(\"nextland_services.cropsar\")\n\n\n# calculate the cropsar curve for each field and the regional average of all the input fields\n######## FUNCTIONS ################\ndef get_cropar_timeseries(ts_df, unique_ids_fields, metrics_order, time_range, minimal_input_checks=False):\n    index_fAPAR = metrics_order.index('FAPAR')\n    column_indices = ts_df.columns.get_level_values(1)\n    indices = column_indices.isin([index_fAPAR])\n\n    df_S2 = ts_df.loc[:, indices].sort_index().T\n    df_S2 = df_S2.rename(index=dict(enumerate(unique_ids_fields)))\n    if(df_S2.empty):\n        raise ValueError(\"Received an empty Sentinel-2 input dataframe while trying to compute cropSAR!\")\n\n    df_VHVV = ts_df.loc[:, column_indices.isin([metrics_order.index('VH'), metrics_order.index('VV')])].sort_index().T\n    df_VHVV = df_VHVV.rename(index={0: 'vh', 1: 'vv'}, level=1)\n    df_VHVV = df_VHVV.rename(index=dict(enumerate(unique_ids_fields)))\n\n    cropsar_df, cropsar_df_q10, cropsar_df_q90 = run_cropsar_dataframes(\n        df_S2, df_VHVV, date_range=time_range, s2_data_layer='S2_FAPAR', minimal_input_checks=minimal_input_checks\n    )\n\n    if (len(cropsar_df.index) == 0):\n        logger.warning(\"CropSAR returned an empty dataframe. For input, Sentinel-2 input: \")\n        logger.warning(str(df_S2.to_json(indent=2)))\n        logger.warning(\"Sentinel-1 VH-VV: \")\n        logger.warning(str(df_VHVV.to_json(indent=2)))\n\n    cropsar_df = cropsar_df.rename(\n        columns=dict(zip(list(cropsar_df.columns.values), [str(item) + '_cropSAR' for item in unique_ids_fields])))\n    cropsar_df = cropsar_df.round(decimals=3)\n    cropsar_df.index = pd.to_datetime(cropsar_df.index).date\n    cropsar_df = cropsar_df.loc[pd.to_datetime(time_range[0], format = '%Y-%m-%d').date() :pd.to_datetime(time_range[1], format = '%Y-%m-%d').date()]\n    return cropsar_df\n\n\ndef udf_cropsar(udf_data: UdfData):\n    ## constants\n    user_context = udf_data.user_context\n    time_range = user_context.get('date')\n    columns_order = ['VH', 'VV', 'FAPAR']\n    minimal_input_checks = user_context.get('minimal_input_checks')\n\n    ## load the TS\n    ts_dict = udf_data.get_structured_data_list()[0].data\n    if not ts_dict:  # workaround of ts_dict is empty\n        return\n    TS_df = timeseries_json_to_pandas(ts_dict)\n    TS_df.index = pd.to_datetime(TS_df.index).date\n\n\n    if not isinstance(TS_df.columns, pd.MultiIndex):\n        TS_df.columns = pd.MultiIndex.from_product([[0], TS_df.columns])\n\n    amount_fields = next(iter(ts_dict.values()))\n    unique_ids_fields = ['Field_{}'.format(str(p)) for p in range(len(amount_fields))]\n\n\n    logger.info(\"CropSAR input dataframe:\\n\" + str(TS_df.describe()))\n    logger.info(\"Input time range: \" + str(time_range))\n    #logger.warning(str(TS_df.to_json(indent=2,date_format='iso',double_precision=5)))\n\n    ts_df_cropsar = get_cropar_timeseries(TS_df, unique_ids_fields, columns_order, time_range, minimal_input_checks=minimal_input_checks)\n    ts_df_cropsar = ts_df_cropsar.round(decimals=3)\n    ts_df_cropsar.index = ts_df_cropsar.index.astype(str)\n\n\n    udf_data.set_structured_data_list(\n        [StructuredData(description='cropsar', data=ts_df_cropsar.to_dict(), type=\"dict\")])\n\n    return udf_data"
+            },
+            "result": true
+        }
+    },
+    "id": "cropsar1d_combined_less",
+    "summary": "CropSAR 1D initial migration in CDSE",
+    "description": "CropSAR is an innovative technique that uses Sentinel-1 radar observations to augment those of Sentinel-2. By doing so, more continuous vegetation properties monitoring can be performed, including vegetation information for situations where these properties cannot be retrieved from Sentinel-2 observations due to cloud occurrence. This technique is especially beneficial to operational agricultural monitoring, as the entire crop growth cycle can be observed, particularly the drastic changes during its development. The Sentinel-1 \u03c30 backscatter signal contains information on vegetation's structure and moisture content and the underlying soil. This correlation is demonstrated in Figure 1. The CropSAR temporal resolution is defined by the combined revisit rate of Sentinel-1 and cloud-free Sentinel-2 observations. For Belgium and its surroundings (~50\u00b0N), this is almost every day (because both the ascending and descending tracks for Sentinel-1 are acquired).\n\n\nA more detailed introduction to CropSAR, it's working principles, and added value is given in this [blog](https://blog.vito.be/remotesensing/cropsar2019). The various CropSAR web service elements are explained below.\n\n\n>**Note:** CropSAR is intended to provide the augmented Sentinel-1 and -2 vegetation indices for individual agricultural fields. Although it can be requested over larger areas (e.g. at the community level), the added value for such areas will be limited, and it will take a considerable time for the algorithm to provide you with the results.\n\n\n>**Disclaimer:** Requesting CropSAR in NRT (near real-time) will result in a lower performance of the fAPAR estimates. This lower performance only occurs for the fAPAR estimates in 3 months before the real-time.\n\n\n### **Methodology**\nCropSAR takes as input the cloud-interrupted time series of Sentinel-2 fAPAR and adds the uninterrupted time series of Sentinel-1 backscatter. The algorithm then returns a completely cloud-free time series of fAPAR together with its confidence level.",
+    "parameters": [
+        {
+            "name": "geometry",
+            "description": "Area of interest in GeoJSON format",
+            "schema": {
+                "type": "object",
+                "subtype": "geojson"
+            }
+        },
+        {
+            "name": "temporal_extent",
+            "description": "Temporal extent specified as two-element array with start and end date/date-time.",
+            "schema": {
+                "type": "array",
+                "subtype": "temporal-interval",
+                "uniqueItems": true,
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                    "anyOf": [
+                        {
+                            "type": "string",
+                            "subtype": "date-time",
+                            "format": "date-time"
+                        },
+                        {
+                            "type": "string",
+                            "subtype": "date",
+                            "format": "date"
+                        },
+                        {
+                            "type": "null"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "minimal_input_checks",
+            "description": "Optional: by enabling this property, the service will be more forgiving with respect to input data, but may generate unreliable results.",
+            "schema": {
+                "type": "boolean"
+            },
+            "default": false,
+            "optional": true
+        },
+        {
+            "name": "output",
+            "description": "Output type of the result: NDVI, FAPAR, FCOVER",
+            "schema": {
+                "type": "string",
+                "enum": [
+                    "NDVI",
+                    "FAPAR",
+                    "FCOVER"
+                ]
+            },
+            "default": "NDVI",
+            "optional": true
+        }
+    ]
+}
